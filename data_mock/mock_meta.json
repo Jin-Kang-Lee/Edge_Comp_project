@@ -1,0 +1,88 @@
+{
+  "contract_version": "v1",
+  "window_seconds": 1.0,
+  "padding_value": 0,
+  "features": {
+    "n_features": 13,
+    "feature_cols": [
+      "f0",
+      "f1",
+      "f2",
+      "f3",
+      "f4",
+      "f5",
+      "f6",
+      "f7",
+      "f8",
+      "f9",
+      "f10",
+      "f11",
+      "f12"
+    ],
+    "slot_to_feature_idxs": {
+      "0": [
+        0
+      ],
+      "1": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "2": [
+        5,
+        6,
+        7,
+        8
+      ],
+      "3": [
+        9,
+        10,
+        11,
+        12
+      ]
+    },
+    "slot_definitions": {
+      "0": "Motion/Presence (binary duty_cycle)",
+      "1": "Environmental Scalar (mean,std,min,max)",
+      "2": "Inertial/Vibration (accel magnitude mean,std,min,max)",
+      "3": "Other Scalar (mean,std,min,max)"
+    }
+  },
+  "mask": {
+    "n_slots": 4,
+    "mask_cols": [
+      "m0",
+      "m1",
+      "m2",
+      "m3"
+    ],
+    "meaning": "m=1 if slot active else 0",
+    "example_masks_used": [
+      [
+        1,
+        1,
+        1,
+        1
+      ],
+      [
+        0,
+        1,
+        1,
+        1
+      ],
+      [
+        0,
+        0,
+        1,
+        1
+      ],
+      [
+        1,
+        1,
+        0,
+        0
+      ]
+    ]
+  }
+}
