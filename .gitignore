@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# SVDD pipeline artifacts
+svdd_pipeline/data_artifacts/
+svdd_pipeline/ml_env/
