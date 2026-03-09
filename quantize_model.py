@@ -20,8 +20,8 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-# Contract v1 — must match the rest of the pipeline
-FEATURE_COLS = [f"f{i}" for i in range(13)]
+# Contract v2 — must match the rest of the pipeline
+FEATURE_COLS = [f"f{i}" for i in range(16)]
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ def make_representative_dataset(csv_path: str, num_samples: int = 500):
 
     def generator():
         for i in indices:
-            # Shape must be (1, 13) — single unbatched sample
+            # Shape must be (1, 16) — single unbatched sample
             yield [np.expand_dims(X[i], axis=0)]
 
     return generator
@@ -59,17 +59,17 @@ def main():
     ap = argparse.ArgumentParser(description="Quantize autoencoder to INT8 TFLite flatbuffer.")
     ap.add_argument(
         "--model_path",
-        default="data_mock/model_output/autoencoder.keras",
+        default="data_real_prepared/model_output/autoencoder.keras",
         help="Path to the trained autoencoder.keras from train_and_threshold.py",
     )
     ap.add_argument(
         "--rep_data_csv",
-        default="data_mock/mock_normal_norm.csv",
+        default="data_real_prepared/real_normal_norm.csv",
         help="Normalized normal-only CSV used for INT8 calibration (same data used for training)",
     )
     ap.add_argument(
         "--out_dir",
-        default="data_mock/model_output",
+        default="data_real_prepared/model_output",
         help="Directory where autoencoder_int8.tflite will be saved",
     )
     ap.add_argument(

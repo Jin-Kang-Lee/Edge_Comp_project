@@ -7,14 +7,14 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.metrics import classification_report, confusion_matrix
 
-# Contract v1 mapping
+# Contract v2 mapping
 SLOT_TO_IDXS = {
-    0: [0],
-    1: [1, 2, 3, 4],
-    2: [5, 6, 7, 8],
-    3: [9, 10, 11, 12],
+    0: [0, 1, 2, 3],
+    1: [4, 5, 6, 7],
+    2: [8, 9, 10, 11],
+    3: [12, 13, 14, 15],
 }
-FEATURE_COLS = [f"f{i}" for i in range(13)]
+FEATURE_COLS = [f"f{i}" for i in range(16)]
 MASK_COLS = [f"m{i}" for i in range(4)]
 ALL_COLS = FEATURE_COLS + MASK_COLS
 
@@ -30,13 +30,13 @@ def masked_mse_batch(x: np.ndarray, xhat: np.ndarray, m: np.ndarray) -> np.ndarr
 
     slot_feat_masks = []
     for slot in range(4):
-        mask = np.zeros((13,), dtype=bool)
+        mask = np.zeros((16,), dtype=bool)
         mask[SLOT_TO_IDXS[slot]] = True
         slot_feat_masks.append(mask)
 
     for i in range(N):
         active = m[i].astype(bool)
-        feat_mask = np.zeros((13,), dtype=bool)
+        feat_mask = np.zeros((16,), dtype=bool)
         for slot in range(4):
             if active[slot]:
                 feat_mask |= slot_feat_masks[slot]
@@ -53,10 +53,10 @@ def masked_mse_batch(x: np.ndarray, xhat: np.ndarray, m: np.ndarray) -> np.ndarr
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--test_csv", default="data_mock/mock_mixed.csv", help="mixed dataset to test on")
-    ap.add_argument("--stats_json", default="data_mock/norm_stats.json", help="normalization stats")
-    ap.add_argument("--model_path", default="data_mock/model_output/autoencoder.keras", help="trained model")
-    ap.add_argument("--thresholds_json", default="data_mock/model_output/thresholds.json", help="thresholds")
+    ap.add_argument("--test_csv", default="data_real_prepared/real_mixed.csv", help="mixed dataset to test on")
+    ap.add_argument("--stats_json", default="data_real_prepared/norm_stats.json", help="normalization stats")
+    ap.add_argument("--model_path", default="data_real_prepared/model_output/autoencoder.keras", help="trained model")
+    ap.add_argument("--thresholds_json", default="data_real_prepared/model_output/thresholds.json", help="thresholds")
     args = ap.parse_args()
 
     print("Loading data and model...")
@@ -108,6 +108,13 @@ def main():
         y_pred_binary[mask_idx] = (mse[mask_idx] > thr).astype(int)
 
     # 5. Report Results
+    print("\n--- MSE Distribution ---")
+    normal_mse = mse[y_true_binary == 0]
+    anomaly_mse = mse[y_true_binary == 1]
+    print(f"  Normal  MSE  — mean: {np.mean(normal_mse):.4f}  p95: {np.percentile(normal_mse, 95):.4f}  max: {np.max(normal_mse):.4f}")
+    print(f"  Anomaly MSE  — mean: {np.mean(anomaly_mse):.4f}  p50: {np.percentile(anomaly_mse, 50):.4f}  min: {np.min(anomaly_mse):.4f}")
+    print(f"  Active threshold : {list(thresh_data.values())}")
+
     print("\n--- Evaluation Results ---")
     print(classification_report(y_true_binary, y_pred_binary, target_names=["Normal (0)", "Anomaly (1)"]))
 
@@ -124,7 +131,8 @@ def main():
             continue
         idx = (y_true_labels == label_type)
         acc = np.mean(y_pred_binary[idx] == 1) * 100
-        print(f"  {label_type}: {acc:.1f}% caught ({np.sum(y_pred_binary[idx])}/{np.sum(idx)})")
+        type_mse = mse[idx]
+        print(f"  {label_type}: {acc:.1f}% caught ({np.sum(y_pred_binary[idx])}/{np.sum(idx)})  avg_mse={np.mean(type_mse):.2f}")
 
 if __name__ == "__main__":
     main()

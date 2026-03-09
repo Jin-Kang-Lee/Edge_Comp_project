@@ -39,30 +39,35 @@ class TqdmEpochCallback(tf.keras.callbacks.Callback):
 
 # Contract v1 mapping (same as your validator/normalizer)
 SLOT_TO_IDXS = {
-    0: [0],
-    1: [1, 2, 3, 4],
-    2: [5, 6, 7, 8],
-    3: [9, 10, 11, 12],
+    0: [0, 1, 2, 3],
+    1: [4, 5, 6, 7],
+    2: [8, 9, 10, 11],
+    3: [12, 13, 14, 15],
 }
 
-FEATURE_COLS = [f"f{i}" for i in range(13)]
+FEATURE_COLS = [f"f{i}" for i in range(16)]
 MASK_COLS = [f"m{i}" for i in range(4)]
 ALL_COLS = FEATURE_COLS + MASK_COLS
 
 
 def build_autoencoder(input_dim: int) -> tf.keras.Model:
     """
-    Small MLP autoencoder designed to quantize well (INT8) and run fast on MCU.
+    MLP autoencoder for 16-feature real sensor data.
+    - Encoder: 64 -> 32 -> bottleneck(8)
+    - Decoder: 8  -> 32 -> 64 -> output
+    Bottleneck of 8 is the Goldilocks zone: big enough to faithfully
+    learn the 4-slot sensor patterns, tight enough that anomalous
+    inputs cannot be reconstructed accurately.
     """
     inp = tf.keras.Input(shape=(input_dim,), name="x")
-    x = tf.keras.layers.Dense(32, activation="relu")(inp)
-    x = tf.keras.layers.Dense(16, activation="relu")(x)
-    z = tf.keras.layers.Dense(6, activation="relu", name="latent")(x)
-    x = tf.keras.layers.Dense(16, activation="relu")(z)
+    x = tf.keras.layers.Dense(64, activation="relu")(inp)
     x = tf.keras.layers.Dense(32, activation="relu")(x)
+    z = tf.keras.layers.Dense(8, activation="relu", name="latent")(x)  # bottleneck
+    x = tf.keras.layers.Dense(32, activation="relu")(z)
+    x = tf.keras.layers.Dense(64, activation="relu")(x)
     out = tf.keras.layers.Dense(input_dim, activation=None, name="x_hat")(x)
 
-    model = tf.keras.Model(inp, out, name="ae_mlp_v1")
+    model = tf.keras.Model(inp, out, name="ae_mlp_v2")
     model.compile(optimizer=tf.keras.optimizers.Adam(1e-3), loss="mse")
     return model
 
@@ -75,7 +80,7 @@ def mask_pattern(m_row: np.ndarray) -> str:
 def masked_mse_batch(x: np.ndarray, xhat: np.ndarray, m: np.ndarray) -> np.ndarray:
     """
     Compute mask-aware MSE for each row.
-    - x, xhat: (N, 13)
+    - x, xhat: (N, 16)
     - m: (N, 4)
     Only include features from active slots per row.
     Returns: (N,) mse values
@@ -83,16 +88,16 @@ def masked_mse_batch(x: np.ndarray, xhat: np.ndarray, m: np.ndarray) -> np.ndarr
     N = x.shape[0]
     mse = np.zeros((N,), dtype=np.float32)
 
-    # Precompute per-slot feature indices as boolean masks (length 13)
+    # Precompute per-slot feature indices as boolean masks (length 16)
     slot_feat_masks = []
     for slot in range(4):
-        mask = np.zeros((13,), dtype=bool)
+        mask = np.zeros((16,), dtype=bool)
         mask[SLOT_TO_IDXS[slot]] = True
         slot_feat_masks.append(mask)
 
     for i in range(N):
         active = m[i].astype(bool)
-        feat_mask = np.zeros((13,), dtype=bool)
+        feat_mask = np.zeros((16,), dtype=bool)
         for slot in range(4):
             if active[slot]:
                 feat_mask |= slot_feat_masks[slot]
@@ -124,9 +129,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--train_csv", required=True, help="normalized training csv (normal-only)")
     ap.add_argument("--out_dir", required=True)
-    ap.add_argument("--epochs", type=int, default=50)
+    ap.add_argument("--epochs", type=int, default=100)  # bumped from 50
     ap.add_argument("--batch", type=int, default=256)
-    ap.add_argument("--threshold_percentile", type=float, default=99.5)
+    ap.add_argument("--threshold_percentile", type=float, default=95.0)  # lowered from 99.5
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -145,7 +150,7 @@ def main():
     split = int(0.9 * len(X))
     X_train, X_val = X[:split], X[split:]
 
-    model = build_autoencoder(input_dim=13)
+    model = build_autoencoder(input_dim=16)
     callbacks = [
         tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True),
         tf.keras.callbacks.ReduceLROnPlateau(patience=3, factor=0.5),

@@ -4,13 +4,13 @@ import numpy as np
 import pandas as pd
 
 SLOT_TO_IDXS = {
-    0: [0],
-    1: [1, 2, 3, 4],
-    2: [5, 6, 7, 8],
-    3: [9, 10, 11, 12],
+    0: [0, 1, 2, 3],
+    1: [4, 5, 6, 7],
+    2: [8, 9, 10, 11],
+    3: [12, 13, 14, 15],
 }
 
-FEATURE_COLS = [f"f{i}" for i in range(13)]
+FEATURE_COLS = [f"f{i}" for i in range(16)]
 MASK_COLS = [f"m{i}" for i in range(4)]
 ALL_COLS = FEATURE_COLS + MASK_COLS
 
@@ -64,23 +64,17 @@ def main():
                 )
 
     # ---- Range sanity
-    # duty_cycle in [0,1] where active
-    active0 = df["m0"] == 1
-    if active0.any():
-        v = df.loc[active0, "f0"]
-        if (v < -tol).any() or (v > 1 + tol).any():
-            die("Slot0 duty_cycle f0 out of [0,1] range.")
-
     # std features non-negative
-    for std_col in ["f2", "f6", "f10"]:
+    for std_col in ["f1", "f5", "f9", "f13"]:
         if (df[std_col] < -tol).any():
             die(f"Std column {std_col} has negative values.")
 
-    # min <= mean <= max for slot1,2,3
+    # min <= mean <= max for slot0,1,2,3
     groups = {
-        "slot1": ("m1", "f1", "f3", "f4"),  # mean, min, max
-        "slot2": ("m2", "f5", "f7", "f8"),
-        "slot3": ("m3", "f9", "f11", "f12"),
+        "slot0": ("m0", "f0", "f2", "f3"),  # mean, min, max
+        "slot1": ("m1", "f4", "f6", "f7"),
+        "slot2": ("m2", "f8", "f10", "f11"),
+        "slot3": ("m3", "f12", "f14", "f15"),
     }
     for name, (mcol, mean_c, min_c, max_c) in groups.items():
         active = df[mcol] == 1

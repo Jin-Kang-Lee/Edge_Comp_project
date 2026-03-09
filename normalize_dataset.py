@@ -7,13 +7,13 @@ import numpy as np
 import pandas as pd
 
 SLOT_TO_IDXS = {
-    0: [0],
-    1: [1, 2, 3, 4],
-    2: [5, 6, 7, 8],
-    3: [9, 10, 11, 12],
+    0: [0, 1, 2, 3],
+    1: [4, 5, 6, 7],
+    2: [8, 9, 10, 11],
+    3: [12, 13, 14, 15],
 }
 
-FEATURE_COLS = [f"f{i}" for i in range(13)]
+FEATURE_COLS = [f"f{i}" for i in range(16)]
 MASK_COLS = [f"m{i}" for i in range(4)]
 ALL_COLS = FEATURE_COLS + MASK_COLS
 
@@ -31,8 +31,8 @@ def main():
     X = df[FEATURE_COLS].to_numpy(dtype=np.float32)
     M = df[MASK_COLS].to_numpy(dtype=np.int32)
 
-    means = np.zeros(13, dtype=np.float32)
-    stds = np.ones(13, dtype=np.float32)
+    means = np.zeros(16, dtype=np.float32)
+    stds = np.ones(16, dtype=np.float32)
 
     # Compute per-feature mean/std, but only on rows where the slot is active
     for slot, idxs in SLOT_TO_IDXS.items():
@@ -64,7 +64,7 @@ def main():
     out_df.to_csv(args.out_csv, index=False)
 
     stats = {
-        "contract_version": "v1",
+        "contract_version": "v2",
         "feature_cols": FEATURE_COLS,
         "mask_cols": MASK_COLS,
         "slot_to_feature_idxs": SLOT_TO_IDXS,
