@@ -14,6 +14,8 @@ Output:
 """
 
 import argparse
+import json
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -65,7 +67,9 @@ def main():
     ap.add_argument(
         "--rep_data_csv",
         default="data_real_prepared/real_normal_norm.csv",
-        help="Normalized normal-only CSV used for INT8 calibration (same data used for training)",
+        help="IMPORTANT: Must be the NORMALIZED normal-only CSV (real_normal_norm.csv), "
+             "not the raw CSV. The calibration must see Z-score scaled values "
+             "matching what the model was trained on.",
     )
     ap.add_argument(
         "--out_dir",
@@ -73,10 +77,14 @@ def main():
         help="Directory where autoencoder_int8.tflite will be saved",
     )
     ap.add_argument(
-        "--num_calibration_samples",
-        type=int,
-        default=500,
-        help="How many samples to use for INT8 calibration (100-500 is sufficient)",
+        "--thresholds_json",
+        default="data_real_prepared/model_output/thresholds.json",
+        help="Path to thresholds.json produced by train_and_threshold.py",
+    )
+    ap.add_argument(
+        "--norm_stats_json",
+        default="data_real_prepared/norm_stats.json",
+        help="Path to norm_stats.json produced by normalize_dataset.py",
     )
     args = ap.parse_args()
 
@@ -116,10 +124,10 @@ def main():
     # Step 3: Calibration — attach the representative dataset generator
     # ------------------------------------------------------------------
     print(f"\n[Step 3] Attaching calibration data from: {args.rep_data_csv}")
-    print(f"         Using {args.num_calibration_samples} representative samples...")
+    print(f"         Using 500 representative samples...")
     converter.representative_dataset = make_representative_dataset(
         args.rep_data_csv,
-        num_samples=args.num_calibration_samples,
+        num_samples=500,
     )
 
     # ------------------------------------------------------------------
@@ -140,6 +148,40 @@ def main():
     quantized_size = tflite_path.stat().st_size
     reduction = (1 - quantized_size / original_size) * 100
 
+    # ------------------------------------------------------------------
+    # Copy deployment artifacts (thresholds + norm stats) to out_dir
+    # so your friend has a single folder with everything needed for inference
+    # ------------------------------------------------------------------
+    thresh_dst = out_dir / "thresholds.json"
+    stats_dst  = out_dir / "norm_stats.json"
+
+    if Path(args.thresholds_json).exists():
+        if Path(args.thresholds_json).resolve() != thresh_dst.resolve():
+            shutil.copy2(args.thresholds_json, thresh_dst)
+            print(f"\n[Artifacts] Copied thresholds  → {thresh_dst}")
+        else:
+            print(f"\n[Artifacts] thresholds.json already in output dir: {thresh_dst}")
+    else:
+        print(f"[WARNING] thresholds.json not found at {args.thresholds_json}. "
+              "Your friend will need this file to run inference!")
+
+    if Path(args.norm_stats_json).exists():
+        if Path(args.norm_stats_json).resolve() != stats_dst.resolve():
+            shutil.copy2(args.norm_stats_json, stats_dst)
+            print(f"[Artifacts] Copied norm stats   → {stats_dst}")
+        else:
+            print(f"[Artifacts] norm_stats.json already in output dir: {stats_dst}")
+    else:
+        print(f"[WARNING] norm_stats.json not found at {args.norm_stats_json}. "
+              "Your friend will need this file to pre-process raw sensor inputs!")
+
+    # Print threshold values so your friend knows the anomaly detection cutoff
+    if thresh_dst.exists():
+        thresholds = json.loads(thresh_dst.read_text())["thresholds_by_mask"]
+        print("\n[Thresholds] Anomaly detection cutoffs (MSE > threshold = anomaly):")
+        for mask_pattern, thr in thresholds.items():
+            print(f"  mask={mask_pattern} → {thr:.6f}")
+
     print(f"\n{'='*50}")
     print(f"[SUCCESS] Saved: {tflite_path}")
     print(f"  Original .keras size : {original_size / 1024:.2f} KB")
@@ -147,11 +189,16 @@ def main():
     print(f"  Size reduction       : {reduction:.1f}%")
     print(f"{'='*50}")
 
-    if quantized_size <= 50 * 1024:
-        print("[OK] Model fits comfortably within Pico 2 Flash/SRAM budget.")
+    # Pico 2 has 520 KB SRAM; 200 KB is a safe conservative limit for the model
+    if quantized_size <= 200 * 1024:
+        print("[OK] Model fits comfortably within Pico 2 Flash/SRAM budget (< 200 KB).")
     else:
-        print("[WARNING] Model may be too large. Consider reducing layer sizes in build_autoencoder().")
+        print("[WARNING] Model may be too large for Pico 2. Consider reducing layer sizes in build_autoencoder().")
 
+    print("\n--- Files to send ---")
+    print(f"  1. {tflite_path}")
+    print(f"  2. {thresh_dst}")
+    print(f"  3. {stats_dst}")
     print("\nNext step: run publish_mqtt.py to push this .tflite to the Pico 2 over MQTT.")
 
 
