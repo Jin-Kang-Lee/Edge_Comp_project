@@ -113,16 +113,64 @@ def masked_mse_batch(x: np.ndarray, xhat: np.ndarray, m: np.ndarray) -> np.ndarr
     return mse
 
 
-def compute_thresholds_by_mask(mse: np.ndarray, M: np.ndarray, percentile: float) -> Dict[str, float]:
+def compute_thresholds_by_mask(
+    X: np.ndarray,
+    X_hat: np.ndarray,
+    M: np.ndarray,
+    percentile: float,
+) -> Dict[str, float]:
+    """
+    Compute anomaly thresholds for ALL 15 active mask combinations (0001..1111).
+
+    For masks that exist in the training data, we use the real rows.
+    For masks that are missing (e.g. your data is all 1111), we simulate them
+    by zeroing out the inactive slots on the 1111 rows and recomputing the
+    mask-aware MSE. This guarantees your friend has a valid threshold even if
+    they unplug one or more sensors.
+    """
     thresholds = {}
+
+    # --- Pass 1: real masks found in the dataset ---
     patterns = np.array([mask_pattern(M[i]) for i in range(len(M))])
-
     for p in np.unique(patterns):
-        vals = mse[patterns == p]
-        thr = float(np.percentile(vals, percentile))
-        thresholds[p] = thr
+        vals = masked_mse_batch(X, X_hat, M)[patterns == p]
+        thresholds[p] = float(np.percentile(vals, percentile))
 
-    return thresholds
+    # --- Pass 2: synthesize missing mask combinations ---
+    # Use 1111 rows as the base (most data-rich mask)
+    base_mask_str = "1111"
+    base_idx = np.where(patterns == base_mask_str)[0]
+    if len(base_idx) == 0:
+        # Fall back to whichever mask has the most rows
+        base_mask_str = max(np.unique(patterns), key=lambda p: np.sum(patterns == p))
+        base_idx = np.where(patterns == base_mask_str)[0]
+
+    X_base = X[base_idx].copy()
+    X_hat_base = X_hat[base_idx].copy()
+
+    # Iterate over all 15 non-zero 4-bit combinations
+    for bits in range(1, 16):
+        synth_mask = [(bits >> (3 - i)) & 1 for i in range(4)]
+        p = "".join(str(b) for b in synth_mask)
+
+        if p in thresholds:
+            continue  # already computed from real data
+
+        # Build a synthetic M matrix for these rows using the simulated mask
+        M_synth = np.tile(synth_mask, (len(X_base), 1)).astype(np.int32)
+
+        # Zero out feature columns belonging to inactive slots
+        X_synth = X_base.copy()
+        X_hat_synth = X_hat_base.copy()
+        for slot, idxs in SLOT_TO_IDXS.items():
+            if synth_mask[slot] == 0:
+                X_synth[:, idxs] = 0.0
+                X_hat_synth[:, idxs] = 0.0
+
+        mse_synth = masked_mse_batch(X_synth, X_hat_synth, M_synth)
+        thresholds[p] = float(np.percentile(mse_synth, percentile))
+
+    return dict(sorted(thresholds.items()))
 
 
 def main():
@@ -170,7 +218,7 @@ def main():
     X_hat = model.predict(X, batch_size=args.batch, verbose=0)
     mse = masked_mse_batch(X, X_hat, M)
 
-    thresholds = compute_thresholds_by_mask(mse, M, args.threshold_percentile)
+    thresholds = compute_thresholds_by_mask(X, X_hat, M, args.threshold_percentile)
 
     # Save model
     model_path = out_dir / "autoencoder.keras"
