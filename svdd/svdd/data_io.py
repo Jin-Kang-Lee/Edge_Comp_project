@@ -1,9 +1,7 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Optional
 
 import numpy as np
-
-from .constants import FEATURE_DIM
 
 
 def load_csv_numeric(path: Path) -> np.ndarray:
@@ -30,6 +28,10 @@ def load_csv_numeric(path: Path) -> np.ndarray:
     return data.astype(np.float32)
 
 
-def validate_feature_dim(data: np.ndarray, expected_dim: int = FEATURE_DIM) -> None:
-    if data.shape[1] != expected_dim:
+def validate_feature_dim(data: np.ndarray, expected_dim: Optional[int] = None) -> None:
+    if data.ndim != 2:
+        raise ValueError(f"Expected 2D input array, got shape {data.shape}")
+    if data.shape[1] <= 0:
+        raise ValueError("Input data must contain at least one feature column.")
+    if expected_dim is not None and data.shape[1] != expected_dim:
         raise ValueError(f"Expected {expected_dim} input features, got {data.shape[1]}")

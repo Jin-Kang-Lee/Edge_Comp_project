@@ -1,9 +1,6 @@
 import tensorflow as tf
 
-from .constants import FEATURE_DIM
-
-
-def build_encoder(input_dim: int = FEATURE_DIM) -> tf.keras.Model:
+def build_encoder(input_dim: int) -> tf.keras.Model:
     model = tf.keras.Sequential(
         [
             tf.keras.layers.InputLayer(input_shape=(input_dim,)),

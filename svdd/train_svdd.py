@@ -64,7 +64,8 @@ def main() -> int:
         LOGGER.info("Loaded data shape: %s", data.shape)
         validate_feature_dim(data)
 
-        model = build_encoder()
+        input_dim = int(data.shape[1])
+        model = build_encoder(input_dim=input_dim)
 
         # Warmup: compute center 'c' from a single forward pass on 10% of data.
         batch_size = max(1, int(args.batch_size))
@@ -100,7 +101,7 @@ def main() -> int:
 
         # Save artifacts.
         model_path = save_model(model, out_dir)
-        config_path = save_config(out_dir, center, p99)
+        config_path = save_config(out_dir, center, p99, input_dim)
         report_path = save_report(out_dir, history.history.get("loss", []), dists)
 
         LOGGER.info("Saved model to %s", model_path)

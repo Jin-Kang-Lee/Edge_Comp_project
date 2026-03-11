@@ -5,8 +5,6 @@ from typing import Dict, List
 import numpy as np
 import tensorflow as tf
 
-from .constants import FEATURE_DIM
-
 
 def save_model(model: tf.keras.Model, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -15,12 +13,12 @@ def save_model(model: tf.keras.Model, out_dir: Path) -> Path:
     return model_path
 
 
-def save_config(out_dir: Path, center: np.ndarray, p99: float) -> Path:
+def save_config(out_dir: Path, center: np.ndarray, p99: float, input_dim: int) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     config = {
         "center_c": center.tolist(),
         "p99_threshold": float(p99),
-        "input_dim": FEATURE_DIM,
+        "input_dim": int(input_dim),
         "embedding_dim": int(center.shape[0]),
     }
     config_path = out_dir / "svdd_config.json"
