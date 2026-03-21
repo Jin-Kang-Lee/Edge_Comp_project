@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.venv/
+.venv-metal/
+.venv311/
+.venv311_cpu/
+.DS_Store
+
+# Forecast model artifacts
+forecast_model/data_real/
+forecast_model/model_output/
